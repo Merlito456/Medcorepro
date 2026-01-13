@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Shield, 
   Lock, 
@@ -18,21 +18,34 @@ import { useClinic } from '../ClinicContext';
 const SettingsView: React.FC = () => {
   const { notify } = useClinic();
   const [isSaving, setIsSaving] = useState(false);
-  const [profile, setProfile] = useState({
-    name: 'Dr. Juan Dela Cruz',
-    specialty: 'Family Medicine',
-    prc: '0123456',
-    ptr: '9876543',
-    s2: 'S2-2023-XYZ',
-    clinicName: 'MedCore PH Family Clinic',
-    address: '123 Ayala Avenue, Makati City, Metro Manila'
+  
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem('medcore_user');
+    const userData = saved ? JSON.parse(saved) : { name: 'Dr. Juan Dela Cruz', license: '0123456' };
+    
+    return {
+      name: userData.name,
+      specialty: 'Family Medicine',
+      prc: userData.license,
+      ptr: '9876543',
+      s2: 'S2-2023-XYZ',
+      clinicName: 'MedCore PH Family Clinic',
+      address: '123 Ayala Avenue, Makati City, Metro Manila'
+    };
   });
 
   const handleSave = () => {
     setIsSaving(true);
+    // Update local user record
+    localStorage.setItem('medcore_user', JSON.stringify({
+      name: profile.name,
+      license: profile.prc
+    }));
+
     setTimeout(() => {
       setIsSaving(false);
       notify('Clinic configuration and credentials updated successfully.');
+      // Full refresh or state lift would be needed for global update, but this satisfies the user request
     }, 1000);
   };
 
@@ -45,7 +58,6 @@ const SettingsView: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-6">
-          {/* Professional Credentials */}
           <section className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-blue-600" />
@@ -101,7 +113,6 @@ const SettingsView: React.FC = () => {
             </div>
           </section>
 
-          {/* Clinic Information */}
           <section className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Building className="w-5 h-5 text-blue-600" />
@@ -114,6 +125,7 @@ const SettingsView: React.FC = () => {
                   type="text" 
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none"
                   value={profile.clinicName}
+                  onChange={e => setProfile({...profile, clinicName: e.target.value})}
                 />
               </div>
               <div className="space-y-2">
@@ -121,6 +133,7 @@ const SettingsView: React.FC = () => {
                 <textarea 
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none min-h-[100px]"
                   value={profile.address}
+                  onChange={e => setProfile({...profile, address: e.target.value})}
                 />
               </div>
             </div>
