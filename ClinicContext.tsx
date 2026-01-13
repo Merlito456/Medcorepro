@@ -1,23 +1,10 @@
-
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { Patient, Appointment, Medicine } from './types';
+import { Patient, Appointment, Medicine, Consultation, Invoice } from './types';
 import { supabase } from './supabaseClient';
-
-interface Invoice {
-  id: string;
-  patient: string;
-  total: number;
-  disc: number;
-  ph: number;
-  net: number;
-  status: 'Paid' | 'Pending' | 'Partial' | 'Unpaid';
-  method: string;
-  date: string;
-}
 
 interface OfflineAction {
   id: string;
-  type: 'ADD_PATIENT' | 'REMOVE_PATIENT' | 'ADD_APPOINTMENT' | 'UPDATE_APPOINTMENT_STATUS' | 'ADD_INVOICE' | 'ADD_MEDICINE';
+  type: 'ADD_PATIENT' | 'REMOVE_PATIENT' | 'ADD_APPOINTMENT' | 'UPDATE_APPOINTMENT_STATUS' | 'ADD_INVOICE' | 'ADD_MEDICINE' | 'ADD_CONSULTATION';
   payload: any;
   timestamp: number;
 }
@@ -35,12 +22,14 @@ interface ClinicContextType {
   appointments: Appointment[];
   inventory: Medicine[];
   invoices: Invoice[];
+  consultations: Consultation[];
   addPatient: (patient: Patient) => Promise<void>;
   removePatient: (id: string) => Promise<void>;
   addAppointment: (apt: Appointment) => Promise<void>;
   updateAppointmentStatus: (id: string, status: any) => Promise<void>;
   addInvoice: (invoice: Invoice) => Promise<void>;
   addMedicine: (medicine: Medicine) => Promise<void>;
+  addConsultation: (consultation: Consultation) => Promise<void>;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   notify: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -54,7 +43,6 @@ interface ClinicContextType {
 
 const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
 
-// Fix: Export the hook so it can be used in other components
 export const useClinic = () => {
   const context = useContext(ClinicContext);
   if (context === undefined) {
@@ -63,12 +51,12 @@ export const useClinic = () => {
   return context;
 };
 
-// Fix: Complete the ClinicProvider implementation which was previously truncated
 export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [patients, setPatients] = useState<Patient[]>(() => JSON.parse(localStorage.getItem('mc_patients') || '[]'));
   const [appointments, setAppointments] = useState<Appointment[]>(() => JSON.parse(localStorage.getItem('mc_appointments') || '[]'));
   const [inventory, setInventory] = useState<Medicine[]>(() => JSON.parse(localStorage.getItem('mc_inventory') || '[]'));
   const [invoices, setInvoices] = useState<Invoice[]>(() => JSON.parse(localStorage.getItem('mc_invoices') || '[]'));
+  const [consultations, setConsultations] = useState<Consultation[]>(() => JSON.parse(localStorage.getItem('mc_consultations') || '[]'));
   const [offlineQueue, setOfflineQueue] = useState<OfflineAction[]>(() => JSON.parse(localStorage.getItem('mc_offline_queue') || '[]'));
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -84,7 +72,7 @@ export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const newNotification: Notification = { id, message, type, timestamp: new Date(), read: false };
     
     setNotifications(prev => [...prev, newNotification]);
-    setNotificationHistory(prev => [newNotification, ...prev].slice(0, 20)); // Keep last 20
+    setNotificationHistory(prev => [newNotification, ...prev].slice(0, 20));
 
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
@@ -105,9 +93,10 @@ export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     localStorage.setItem('mc_appointments', JSON.stringify(appointments));
     localStorage.setItem('mc_inventory', JSON.stringify(inventory));
     localStorage.setItem('mc_invoices', JSON.stringify(invoices));
+    localStorage.setItem('mc_consultations', JSON.stringify(consultations));
     localStorage.setItem('mc_offline_queue', JSON.stringify(offlineQueue));
     localStorage.setItem('mc_notification_history', JSON.stringify(notificationHistory));
-  }, [patients, appointments, inventory, invoices, offlineQueue, notificationHistory]);
+  }, [patients, appointments, inventory, invoices, consultations, offlineQueue, notificationHistory]);
 
   const syncOfflineQueue = useCallback(async () => {
     if (offlineQueue.length === 0) return;
@@ -134,11 +123,22 @@ export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           case 'UPDATE_APPOINTMENT_STATUS':
             ({ error } = await supabase.from('appointments').update({ status: action.payload.status }).eq('id', action.payload.id));
             break;
+          case 'ADD_CONSULTATION':
+            ({ error } = await supabase.from('consultations').insert([{
+              patient_id: action.payload.patientId,
+              patient_name: action.payload.patientName,
+              subjective: action.payload.subjective,
+              objective: action.payload.objective,
+              assessment: action.payload.assessment,
+              plan: action.payload.plan,
+              transcript: action.payload.transcript
+            }]));
+            break;
           case 'ADD_INVOICE':
-            // Invoice sync can be added here if needed
+            // Invoice sync could go here if table exists
             break;
           case 'ADD_MEDICINE':
-            // Medicine sync can be added here if needed
+            // Medicine sync could go here if table exists
             break;
         }
         if (error) throw error;
@@ -224,17 +224,37 @@ export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     notify(`Inventory updated for ${medicine.name}.`);
   };
 
+  const addConsultation = async (consultation: Consultation) => {
+    setConsultations(prev => [consultation, ...prev]);
+    if (isOffline) {
+      setOfflineQueue(prev => [...prev, { id: Date.now().toString(), type: 'ADD_CONSULTATION', payload: consultation, timestamp: Date.now() }]);
+    } else {
+      await supabase.from('consultations').insert([{
+        patient_id: consultation.patientId,
+        patient_name: consultation.patientName,
+        subjective: consultation.subjective,
+        objective: consultation.objective,
+        assessment: consultation.assessment,
+        plan: consultation.plan,
+        transcript: consultation.transcript
+      }]);
+    }
+    notify(`EMR note for ${consultation.patientName} saved.`);
+  };
+
   const value = {
     patients,
     appointments,
     inventory,
     invoices,
+    consultations,
     addPatient,
     removePatient,
     addAppointment,
     updateAppointmentStatus,
     addInvoice,
     addMedicine,
+    addConsultation,
     searchTerm,
     setSearchTerm,
     notify,
