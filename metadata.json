@@ -1,0 +1,7 @@
+{
+  "name": "MedCore Pro - Clinic Management System",
+  "description": "A comprehensive medical clinic management platform featuring patient EMR, scheduling, billing, and Gemini-powered clinical decision support.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
