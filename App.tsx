@@ -37,6 +37,11 @@ import SettingsView from './views/SettingsView';
 import LandingView from './views/LandingView';
 import Modal from './components/Modal';
 
+interface UserProfile {
+  name: string;
+  license: string;
+}
+
 const NotificationOverlay: React.FC = () => {
   const { notifications } = useClinic();
   return (
@@ -57,7 +62,7 @@ const NotificationOverlay: React.FC = () => {
   );
 };
 
-const MainLayout: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+const MainLayout: React.FC<{ user: UserProfile, onLogout: () => void }> = ({ user, onLogout }) => {
   const [activeModule, setActiveModule] = useState<Module>(Module.DASHBOARD);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -193,7 +198,7 @@ const MainLayout: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           <div className="flex items-center gap-4">
              <div className="text-right hidden lg:block mr-4 border-r border-slate-100 pr-4">
                 <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Clinic Credentials</p>
-                <p className="text-xs font-medium text-slate-600">PRC: 0123456 • PTR: 9876543</p>
+                <p className="text-xs font-medium text-slate-600">PRC: {user.license} • PTR: 9876543</p>
               </div>
             
             <div className="relative" ref={notificationRef}>
@@ -252,7 +257,7 @@ const MainLayout: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
               className="flex items-center gap-3 px-2 py-1 rounded-xl hover:bg-slate-50 transition-all cursor-pointer group border border-transparent hover:border-slate-200"
             >
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-slate-900 leading-none">Dr. Juan Dela Cruz</p>
+                <p className="text-sm font-semibold text-slate-900 leading-none">{user.name}</p>
                 <p className="text-xs text-blue-600 mt-1 flex items-center gap-1 justify-end font-medium">
                   <ShieldCheck className="w-3 h-3" /> PH-Licensed
                 </p>
@@ -276,7 +281,7 @@ const MainLayout: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
           <div className="flex items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
             <img src="https://picsum.photos/seed/docph/80/80" className="w-20 h-20 rounded-2xl border-4 border-white shadow-sm" alt="Doctor" />
             <div>
-              <h3 className="text-2xl font-bold text-slate-900">Dr. Juan Dela Cruz</h3>
+              <h3 className="text-2xl font-bold text-slate-900">{user.name}</h3>
               <p className="text-blue-600 font-medium flex items-center gap-2 mt-1">
                 <ShieldCheck className="w-4 h-4" /> Registered Medical Practitioner
               </p>
@@ -285,8 +290,8 @@ const MainLayout: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-white border border-slate-200 rounded-xl">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PRC License</p>
-              <p className="font-mono text-lg font-bold text-slate-900">0123456</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PRC License No.</p>
+              <p className="font-mono text-lg font-bold text-slate-900">{user.license}</p>
             </div>
             <div className="p-4 bg-white border border-slate-200 rounded-xl">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PTR Number</p>
@@ -334,20 +339,28 @@ const App: React.FC = () => {
     return localStorage.getItem('medcore_session') === 'active';
   });
 
-  const handleLoginSuccess = () => {
+  const [user, setUser] = useState<UserProfile>(() => {
+    const saved = localStorage.getItem('medcore_user');
+    return saved ? JSON.parse(saved) : { name: 'Dr. Juan Dela Cruz', license: '0123456' };
+  });
+
+  const handleLoginSuccess = (userData: UserProfile) => {
     localStorage.setItem('medcore_session', 'active');
+    localStorage.setItem('medcore_user', JSON.stringify(userData));
+    setUser(userData);
     setIsAuthenticated(true);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('medcore_session');
+    localStorage.removeItem('medcore_user');
     setIsAuthenticated(false);
   };
 
   return (
     <ClinicProvider>
       {isAuthenticated ? (
-        <MainLayout onLogout={handleLogout} />
+        <MainLayout user={user} onLogout={handleLogout} />
       ) : (
         <LandingView onLoginSuccess={handleLoginSuccess} />
       )}
